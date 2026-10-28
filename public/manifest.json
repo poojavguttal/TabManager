@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Resume",
+  "version": "0.1.0",
+  "description": "Keeps a to-do list of what you left behind in your tabs. Runs 100% on your computer — no servers, no accounts.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "sidePanel",
+    "notifications",
+    "alarms",
+    "idle",
+    "scripting",
+    "favicon",
+    "contextMenus"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Tab Resume",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "save-tab": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Save this tab to Tab Resume"
+    }
+  }
+}
