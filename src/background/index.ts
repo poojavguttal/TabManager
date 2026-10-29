@@ -2,10 +2,11 @@
 import { CONFIG, emptyState } from '../shared/config';
 import type { NotifAction, PageMessage, PanelMessage, Prefs } from '../shared/types';
 import { isBlocked, isTrackable, normalizeUrl } from '../shared/url';
-import { addSavedTask, isPending, isShown, merge, setStatus } from './lifecycle';
+import { FINISHED, addSavedTask, isPending, isShown, merge, setStatus } from './lifecycle';
 import { deliver, pickNudge, type Nudge } from './nudges';
 import { evaluate } from './rules';
 import { loadPrefs, loadState, savePrefs, update } from './storage';
+import { because, flushTrace, trace } from './trace';
 import {
   applyPageReport,
   ensureVisit,
@@ -21,24 +22,38 @@ import {
 const MIN = 60_000;
 let lastFocusedWindowId: number | undefined;
 
+// Anything that slips past the handlers below still ends up in the trace log.
+self.addEventListener('error', (e) => {
+  trace('error', 'uncaught', undefined, { message: e.message, at: `${e.filename}:${e.lineno}` });
+  void flushTrace();
+});
+self.addEventListener('unhandledrejection', (e) => {
+  trace('error', 'unhandled rejection', undefined, { message: String(e.reason) });
+  void flushTrace();
+});
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  trace('lifecycle', 'installed', undefined, { reason: details.reason, version: chrome.runtime.getManifest().version });
   await setup();
-  chrome.contextMenus.create({ id: SAVE_MENU_ID, title: 'Add to Tab Resume', contexts: ['page'] }, () => void chrome.runtime.lastError);
+  // Menus survive reloads; recreate them so renamed titles take effect.
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({ id: SAVE_MENU_ID, title: 'Add to Tab Todos', contexts: ['page'] }, () => void chrome.runtime.lastError);
   chrome.contextMenus.create(
-    { id: MOVE_MENU_ID, title: 'Move to Tab Resume (closes the tab)', contexts: ['page'] },
+    { id: MOVE_MENU_ID, title: 'Move to Tab Todos (closes the tab)', contexts: ['page'] },
     () => void chrome.runtime.lastError,
   );
-  chrome.contextMenus.create({ id: LINK_MENU_ID, title: 'Add link to Tab Resume', contexts: ['link'] }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.create({ id: LINK_MENU_ID, title: 'Add link to Tab Todos', contexts: ['link'] }, () => void chrome.runtime.lastError);
   await scanTabs(false);
   // An install/reload orphans copies already running in open tabs; refresh them if access is granted.
   if (await chrome.permissions.contains(ALL_SITES)) await injectIntoOpenTabs();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
+  trace('lifecycle', 'browser started', undefined, { version: chrome.runtime.getManifest().version });
   await setup();
   await scanTabs(true);
 });
@@ -72,7 +87,9 @@ async function setup() {
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   await chrome.alarms.create('tick', { periodInMinutes: 1 });
   chrome.idle.setDetectionInterval(60);
-  await chrome.action.setBadgeBackgroundColor({ color: '#4f46e5' });
+  // Match the logo: yellow badge with dark text (Chrome would otherwise pick white text).
+  await chrome.action.setBadgeBackgroundColor({ color: '#FACC15' });
+  await chrome.action.setBadgeTextColor({ color: '#1C1917' });
 }
 
 /** Tab IDs don't survive a browser restart, so old mappings are closed out and rebuilt. */
@@ -93,7 +110,15 @@ async function scanTabs(browserRestarted: boolean) {
     }
     for (const t of tabs) if (t.id !== undefined) ensureVisit(s, prefs, t.id, t.url, t.title);
     s.focusedTabId = active?.id ?? null;
-  });
+    // A snapshot of the list at startup, so "my list was gone after a restart" can be checked against the log.
+    const all = Object.values(s.tasks);
+    trace('lifecycle', 'list at startup', undefined, {
+      todos: all.filter((t) => t.rule === 'saved' && !FINISHED.has(t.status)).length,
+      shown: all.filter(isShown).length,
+      total: all.length,
+      openTabs: tabs.length,
+    });
+  }, browserRestarted ? 'browser restart' : 'install or reload');
 }
 
 /** Content scripts aren't injected into tabs that were open before install. */
@@ -212,10 +237,17 @@ async function tick(ctx: TickContext = {}) {
       fullscreen: win?.state === 'fullscreen',
     });
     return { nudge, focusedTabId: s.focusedTabId };
-  });
+  }, 'tick');
 
   await updateBadge();
-  if (nudge) await deliver(nudge, prefs, focusedTabId).catch((e) => console.warn('[tab-resume] nudge failed', e));
+  if (nudge) {
+    trace('nudge', 'sent', nudge.ref.key, { title: nudge.title, kind: nudge.ref.kind });
+    await deliver(nudge, prefs, focusedTabId).catch((e) => {
+      console.warn('[tab-todos] nudge failed', e);
+      trace('error', 'nudge failed', nudge.ref.key, { message: String(e) });
+    });
+    await flushTrace();
+  }
 }
 
 async function updateBadge() {
@@ -235,7 +267,7 @@ async function resumeTask(key: string) {
     setStatus(t, 'resumed');
     t.resumedAt = Date.now();
     return { ...t };
-  });
+  }, 'opened from the list');
   if (!task) return;
   const heading = task.rule === 'partial_reading' ? task.lastHeading : undefined;
   const want = normalizeUrl(task.url);
@@ -267,6 +299,7 @@ async function taskAction(action: 'done' | 'dismiss' | 'snooze' | 'restore', key
     // Checking off a new-messages card = "mark as read" for that account.
     if (t.rule === 'new_messages' && (action === 'done' || action === 'dismiss')) {
       markInboxSeen(s, key.slice('new_messages|'.length));
+      because(key, 'marked as read');
       delete s.tasks[key];
       return;
     }
@@ -293,7 +326,7 @@ async function taskAction(action: 'done' | 'dismiss' | 'snooze' | 'restore', key
       setStatus(t, 'snoozed');
       t.snoozeUntil = Date.now() + minutes * MIN;
     }
-  });
+  }, `you clicked ${action}`);
   await updateBadge();
 }
 
@@ -334,7 +367,9 @@ chrome.runtime.onMessage.addListener((msg: IncomingMessage, sender, sendResponse
   void handleMessage(msg, sender)
     .then(sendResponse)
     .catch((err) => {
-      console.error('[tab-resume]', err);
+      console.error('[tab-todos]', err);
+      trace('error', 'message failed', undefined, { type: msg.type, message: String(err) });
+      void flushTrace();
       sendResponse({ error: String(err) });
     });
   return true; // async response
@@ -374,7 +409,7 @@ async function handleMessage(msg: IncomingMessage, sender: chrome.runtime.Messag
     case 'clearAll':
       await update((s) => {
         Object.assign(s, emptyState());
-      });
+      }, 'clear all data');
       await scanTabs(false);
       await updateBadge();
       return;
@@ -399,7 +434,7 @@ async function saveTabs(tabIds: number[], close: boolean): Promise<string | unde
   const now = Date.now();
   await update((s) => {
     for (const t of tabs) addSavedTask(s, { url: t.url!, title: t.title || t.url!, tabId: t.id }, now);
-  });
+  }, close ? 'added by you (tab closed)' : 'added by you');
   if (close) {
     for (const t of tabs) closingAfterSave.add(t.id!);
     await chrome.tabs.remove(tabs.map((t) => t.id!)).catch(() => {});
@@ -415,7 +450,7 @@ async function saveUrl(url: string, title: string | undefined, close: boolean): 
   const open = (await chrome.tabs.query({})).filter((t) => t.id !== undefined && t.url && normalizeUrl(t.url) === want);
   if (open.length) return saveTabs(open.map((t) => t.id!), close);
   const label = title?.trim() || prettyUrl(url);
-  await update((s) => addSavedTask(s, { url, title: label }, Date.now()));
+  await update((s) => addSavedTask(s, { url, title: label }, Date.now()), 'added by you (dropped link)');
   await tick();
   return label;
 }
@@ -447,7 +482,7 @@ async function purgeBlocked(prefs: Prefs) {
       if (s.tabVisit[v.tabId] === v.id) delete s.tabVisit[v.tabId];
     }
     for (const t of Object.values(s.tasks)) if (isBlocked(t.url, prefs.blocklist)) delete s.tasks[t.key];
-  });
+  }, 'site added to blocklist');
 }
 
 /** Sends a nudge right now (ignoring guardrails) so you can check notification permissions / demo. */
@@ -469,7 +504,7 @@ async function testNudge() {
         }
       : {
           id,
-          title: 'Tab Resume is working',
+          title: 'Tab Todos is working',
           message: 'No unfinished tasks yet — this is what a nudge looks like.',
           buttons: [],
           ref: { kind: 'task', actions: [], at: now },

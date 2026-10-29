@@ -1,5 +1,6 @@
 import { DEFAULT_PREFS, emptyState } from '../shared/config';
 import type { Prefs, State } from '../shared/types';
+import { diffTasks, flushTrace, trace } from './trace';
 
 // MV3 service workers get killed when idle, so nothing important lives in memory.
 // All state mutations go through `update`, which serializes them to avoid
@@ -12,14 +13,22 @@ export async function loadState(): Promise<State> {
   return { ...emptyState(), ...(state as Partial<State> | undefined) };
 }
 
-export function update<T>(fn: (s: State) => T | Promise<T>): Promise<T> {
+/** `source` names the caller in the trace log, for task changes that don't give their own reason. */
+export function update<T>(fn: (s: State) => T | Promise<T>, source = 'update'): Promise<T> {
   const run = chain.then(async () => {
     const s = await loadState();
+    const before = structuredClone(s.tasks);
     const result = await fn(s);
+    diffTasks(before, s.tasks, source);
     await chrome.storage.local.set({ state: s });
+    await flushTrace();
     return result;
   });
-  chain = run.catch((err) => console.error('[tab-resume] state update failed', err));
+  chain = run.catch((err) => {
+    console.error('[tab-todos] state update failed', err);
+    trace('error', 'state update failed', undefined, { source, message: String(err) });
+    void flushTrace();
+  });
   return run;
 }
 

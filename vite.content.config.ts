@@ -8,7 +8,7 @@ export default defineConfig({
     lib: {
       entry: 'src/content/sensor.ts',
       formats: ['iife'],
-      name: 'TabResumeSensor',
+      name: 'TabTodosSensor',
       fileName: () => 'content.js',
     },
   },

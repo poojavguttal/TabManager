@@ -179,9 +179,6 @@ h1 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 800; letter-spac
 /* ---------- Settings ---------- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 16px; box-shadow: var(--shadow); }
 .card h3 { margin: 0 0 6px; font-size: 14px; }
-.local-only { display: flex; gap: 12px; align-items: flex-start; background: var(--yellow-wash); border-color: var(--yellow-soft); box-shadow: none; }
-.local-only svg { color: var(--amber); flex: none; margin-top: 1px; }
-.local-only .hint { margin-top: 2px; }
 .settings label { display: block; margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
 .settings textarea, .settings select {
   display: block; width: 100%; margin-top: 5px; padding: 8px 10px; border-radius: 10px;
@@ -210,6 +207,8 @@ h1 { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 800; letter-spac
 .debug li { padding: 7px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; }
 .debug-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .debug-flags { color: var(--muted); }
+.debug-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.debug-error .debug-title { color: #b91c1c; }
 .card .btn-primary { margin-top: 12px; }
 
 /* ---------- Add button + tab picker ---------- */

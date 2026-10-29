@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IGNORED_TYPES, urlPageType } from '../background/classifier';
 import { isShown } from '../background/lifecycle';
+import { TRACE_KEY, type TraceEvent } from '../background/trace';
 import { findApp } from '../shared/apps';
 import { CONFIG, DEFAULT_PREFS, RULE_ICONS, emptyState } from '../shared/config';
 import type { PanelMessage, Prefs, State, Task } from '../shared/types';
@@ -16,7 +17,6 @@ import {
   Logo,
   PlusIcon,
   SearchIcon,
-  ShieldIcon,
   XIcon,
 } from './icons';
 
@@ -331,7 +331,7 @@ function ListView({
       <TopBar>
         <div className="brand">
           <Logo size={26} />
-          <span>Tab Resume</span>
+          <span>Tab Todos</span>
         </div>
         <div className="top-actions">
           <button className="add-btn" onClick={onAdd} title="Pick a tab to add to your list">
@@ -379,7 +379,7 @@ function ListView({
                 <div>
                   <p className="callout-title">Catch unfinished forms and drafts</p>
                   <p className="callout-text">
-                    Lets Tab Resume notice a half-filled form, a doc you stopped reading, or a message you didn't send. It never reads what
+                    Lets Tab Todos notice a half-filled form, a doc you stopped reading, or a message you didn't send. It never reads what
                     you type, and nothing leaves this computer.
                   </p>
                 </div>
@@ -700,8 +700,6 @@ function AddView({ state, onBack }: { state: State; onBack: () => void }) {
 // ---------------------------------------------------------------------------
 
 function SettingsView({ state, prefs, access, onBack }: { state: State; prefs: Prefs; access: Access; onBack: () => void }) {
-  const [blocklist, setBlocklist] = useState(prefs.blocklist.join('\n'));
-  useEffect(() => setBlocklist(prefs.blocklist.join('\n')), [prefs.blocklist]);
 
   const set = (p: Partial<Prefs>) => send({ type: 'setPrefs', prefs: p });
   const hour = (v: string) => (v === '' ? null : Number(v));
@@ -718,19 +716,11 @@ function SettingsView({ state, prefs, access, onBack }: { state: State; prefs: P
       </TopBar>
 
       <main className="content settings">
-        <section className="card local-only">
-          <ShieldIcon width={20} height={20} />
-          <div>
-            <h3>Runs only on this computer</h3>
-            <p className="hint">No servers, no accounts, no network requests. Your list is stored in Chrome on this device and nowhere else.</p>
-          </div>
-        </section>
-
         <section className="card">
           <h3>Page detection</h3>
           <p className="hint">
             {access.granted
-              ? 'On. Tab Resume notices unfinished forms, drafts and reading — without reading what you type.'
+              ? 'On. Tab Todos notices unfinished forms, drafts and reading — without reading what you type.'
               : 'Off. Open tabs and new messages still show up; unfinished forms, drafts and reading need access to sites.'}
           </p>
           {access.granted ? (
@@ -777,28 +767,6 @@ function SettingsView({ state, prefs, access, onBack }: { state: State; prefs: P
           <p className="hint">Uses only the unread number in the tab's title — never the messages themselves.</p>
         </section>
 
-        <section className="card">
-          <h3>Privacy</h3>
-          <label>
-            Never track these sites
-            <textarea
-              rows={6}
-              value={blocklist}
-              onChange={(e) => setBlocklist(e.target.value)}
-              onBlur={() => set({ blocklist: blocklist.split('\n').map((l) => l.trim()).filter(Boolean) })}
-            />
-          </label>
-          <p className="hint">One per line: a site (chase.com) or a word to match in site names (bank).</p>
-          <button
-            className="btn-soft danger"
-            onClick={() => {
-              if (confirm('Delete everything Tab Resume has stored?')) void send({ type: 'clearAll' });
-            }}
-          >
-            Clear all data
-          </button>
-        </section>
-
         <DebugView state={state} />
       </main>
     </>
@@ -828,9 +796,54 @@ function HourOptions() {
   );
 }
 
-/** Raw signals, for tuning the rules. Hidden by default. */
+/** The trace log, newest first, live while the Debug section is open. */
+function useTrace(enabled: boolean): TraceEvent[] {
+  const [events, setEvents] = useState<TraceEvent[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    const load = () =>
+      chrome.storage.local.get(TRACE_KEY).then((r) => setEvents(((r[TRACE_KEY] as TraceEvent[] | undefined) ?? []).slice().reverse()));
+    void load();
+    const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && changes[TRACE_KEY]) void load();
+    };
+    chrome.storage.onChanged.addListener(onChange);
+    return () => chrome.storage.onChanged.removeListener(onChange);
+  }, [enabled]);
+  return events;
+}
+
+/** Saves the trace log plus a snapshot of the list as JSON, to attach to a bug report. */
+async function downloadTrace(state: State) {
+  const { [TRACE_KEY]: trace = [] } = await chrome.storage.local.get(TRACE_KEY);
+  const report = {
+    exportedAt: new Date().toISOString(),
+    version: chrome.runtime.getManifest().version,
+    extensionId: chrome.runtime.id,
+    tasks: Object.values(state.tasks).map(({ key, rule, status, score, title, createdAt, updatedAt }) => ({ key, rule, status, score, title, createdAt, updatedAt })),
+    trace,
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tab-todos-trace-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const traceTime = (at: number) => new Date(at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+function traceSummary(e: TraceEvent): string {
+  const d = e.detail ?? {};
+  const parts = [d.title, d.from && d.to ? `${d.from} → ${d.to}` : d.status, d.reason, d.message].filter(Boolean);
+  if (!parts.length) return Object.entries(d).map(([k, v]) => `${k} ${v}`).join(' · ');
+  return parts.join(' · ');
+}
+
+/** Raw signals and the trace log, for tuning the rules and chasing bugs. Hidden by default. */
 function DebugView({ state }: { state: State }) {
   const [open, setOpen] = useState(false);
+  const events = useTrace(open);
   const visits = useMemo(
     () => Object.values(state.visits).sort((a, b) => b.lastActiveAt - a.lastActiveAt).slice(0, 30),
     [state.visits],
@@ -838,30 +851,53 @@ function DebugView({ state }: { state: State }) {
   return (
     <section className="card">
       <button className={`section-toggle ${open ? 'open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
-        <ChevronIcon width={14} height={14} /> Debug: what the sensor sees
+        <ChevronIcon width={14} height={14} /> Debug: sensor and trace log
       </button>
       {open && (
-        <ul className="debug">
-          {visits.map((v) => {
-            const s = v.signals;
-            const flags = [
-              v.pageType,
-              `${v.activeSec}s`,
-              s.fieldsTotal ? `form ${s.fieldsFilled}/${s.fieldsTotal}` : '',
-              s.draft !== 'none' ? `${s.draft} draft` : '',
-              s.scrollMax ? `scroll ${s.scrollMax}%` : '',
-              s.videoDuration ? `video ${s.videoPct}%` : '',
-              s.submitted ? 'submitted' : '',
-              s.completed ? 'completed' : '',
-            ].filter(Boolean);
-            return (
-              <li key={v.id}>
-                <span className="debug-title">{v.title}</span>
-                <span className="debug-flags">{flags.join(' · ')}</span>
+        <>
+          <div className="debug-head">
+            <span>Trace log · {events.length} events</span>
+            <button className="btn-soft" onClick={() => void downloadTrace(state)}>
+              Download log
+            </button>
+          </div>
+          <ul className="debug">
+            {events.slice(0, 40).map((e, i) => (
+              <li key={`${e.at}-${i}`} className={e.kind === 'error' ? 'debug-error' : undefined}>
+                <span className="debug-title">
+                  {e.kind} · {e.event}
+                </span>
+                <span className="debug-flags">
+                  {traceTime(e.at)} · {traceSummary(e)}
+                </span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+          <div className="debug-head">
+            <span>What the sensor sees</span>
+          </div>
+          <ul className="debug">
+            {visits.map((v) => {
+              const s = v.signals;
+              const flags = [
+                v.pageType,
+                `${v.activeSec}s`,
+                s.fieldsTotal ? `form ${s.fieldsFilled}/${s.fieldsTotal}` : '',
+                s.draft !== 'none' ? `${s.draft} draft` : '',
+                s.scrollMax ? `scroll ${s.scrollMax}%` : '',
+                s.videoDuration ? `video ${s.videoPct}%` : '',
+                s.submitted ? 'submitted' : '',
+                s.completed ? 'completed' : '',
+              ].filter(Boolean);
+              return (
+                <li key={v.id}>
+                  <span className="debug-title">{v.title}</span>
+                  <span className="debug-flags">{flags.join(' · ')}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </section>
   );

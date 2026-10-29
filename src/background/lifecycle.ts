@@ -3,6 +3,7 @@ import { CONFIG } from '../shared/config';
 import type { Candidate, State, Task, TaskStatus } from '../shared/types';
 import { domainOf, normalizeUrl } from '../shared/url';
 import { templateLabel } from './labels';
+import { because } from './trace';
 
 const DAY = 86_400_000;
 export const FINISHED: ReadonlySet<TaskStatus> = new Set(['done', 'dismissed', 'expired']);
@@ -71,27 +72,35 @@ export function merge(s: State, candidates: Candidate[], now: number) {
   for (const t of Object.values(s.tasks)) {
     // New-message cards vanish once you've looked (or the tab closed) — no "done" history for these.
     if (t.rule === 'new_messages' && !seen.has(t.key)) {
+      because(t.key, 'no new messages any more');
       delete s.tasks[t.key];
       continue;
     }
     // Items from rules that no longer exist (removed in an update).
     if (!(t.rule in CONFIG.base)) {
+      because(t.key, 'rule no longer exists');
       delete s.tasks[t.key];
       continue;
     }
-    if (t.status === 'snoozed' && (t.snoozeUntil ?? 0) <= now) t.status = 'active';
+    if (t.status === 'snoozed' && (t.snoozeUntil ?? 0) <= now) {
+      because(t.key, 'snooze ended');
+      t.status = 'active';
+    }
 
     if (!FINISHED.has(t.status) && !seen.has(t.key) && looksFinished(s, t)) {
+      because(t.key, 'page shows it was finished');
       t.status = 'done';
       t.finishedAt = now;
       t.evidence = [...t.evidence, 'Finished — detected automatically'];
     }
     // Your to-dos stay until you check them off.
     if (!FINISHED.has(t.status) && t.rule !== 'saved' && now - t.leftAt > CONFIG.taskExpireDays * DAY) {
+      because(t.key, `untouched for ${CONFIG.taskExpireDays} days`);
       t.status = 'expired';
       t.finishedAt = now;
     }
     if (FINISHED.has(t.status) && now - (t.finishedAt ?? t.updatedAt) > CONFIG.pruneFinishedDays * DAY) {
+      because(t.key, `finished over ${CONFIG.pruneFinishedDays} days ago`);
       delete s.tasks[t.key];
     }
   }

@@ -1,11 +1,14 @@
 {
-  "name": "tab-resume",
+  "name": "tab-todos",
   "version": "0.1.0",
   "description": "Chrome extension that notices unfinished work across tabs and nudges you to resume it",
   "scripts": {
     "icons": "node scripts/make-icons.mjs",
     "build": "npm run icons && vite build && vite build -c vite.content.config.ts",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval": "vitest run -c vitest.eval.config.ts",
     "dev": "vite build --watch"
   },
   "type": "module",
@@ -15,11 +18,13 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   },
   "private": true
 }

@@ -11,6 +11,7 @@ const ACTIVE_WINDOW_MS = 60_000;
 const SUBMIT_TEXT = /^(submit|send|apply|post|publish|reply|comment|place order|pay|confirm|finish|sign up|register|save)\b/i;
 const COMPLETION_TEXT =
   /thank(s| you) for (your )?(application|applying|order|submitting|submission|registering|signing up|purchase)|application (has been |was )?(submitted|received)|order (is |has been )?(confirmed|placed)|successfully (submitted|sent|registered)|we('ve| have) received your/i;
+const CART_EMPTY_TEXT = /(cart|bag|basket) is (currently )?empty|no items in (your )?(shopping )?(cart|bag|basket)|(cart|bag|basket) \(0\)/i;
 const COMPLETION_URL = /(thank-?you|thanks|success|confirmation|confirmed|order-complete|order-received|submitted)|\/(complete|done)(\/|$)/i;
 const SKIPPED_INPUT_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'search', 'password', 'checkbox', 'radio', 'range', 'color']);
 
@@ -234,7 +235,9 @@ function computeFeatures(): PageFeatures {
     hasNav: !!document.querySelector('nav, aside, [role=navigation]'),
     videoDuration: Math.round(mainVideo()?.duration ?? 0),
     hasPassword: !!pw && isVisible(pw),
-    cartWords: /\b(subtotal|order summary|proceed to checkout|shopping (cart|bag))\b/i.test(text.slice(0, 30_000)),
+    // Words a cart page has and a product page doesn't (a product page says "Add to cart", not "Subtotal").
+    cartWords: /\b(subtotal|order summary|proceed to checkout)\b/i.test(text.slice(0, 30_000)),
+    cartEmpty: CART_EMPTY_TEXT.test(text.slice(0, 10_000)),
     completionText: COMPLETION_TEXT.test(text.slice(0, 6000)),
     headings: [...document.querySelectorAll('h1, h2, h3')].slice(0, 8).map((h) => cleanText(h.textContent)).filter(Boolean),
   };

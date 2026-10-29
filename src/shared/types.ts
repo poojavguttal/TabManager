@@ -23,6 +23,8 @@ export interface PageFeatures {
   videoDuration: number;
   hasPassword: boolean;
   cartWords: boolean;
+  /** The page says the cart is empty ("Your cart is empty"). */
+  cartEmpty: boolean;
   completionText: boolean;
   headings: string[];
 }

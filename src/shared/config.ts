@@ -23,7 +23,8 @@ export const CONFIG = {
   draft: { minChars: 20, minAwayMin: 2 },
   /** Chat apps: even a short typed message matters, regardless of time spent. */
   chatDraft: { minChars: 2, minAwayMin: 1 },
-  cart: { minActiveSec: 30, minAwayMin: 2 },
+  /** Anything left in a cart counts, however long you looked at it; only an empty cart doesn't. */
+  cart: { minAwayMin: 2 },
   reading: { minActiveSec: 45, minScroll: 15, maxScroll: 85, minAwayMin: 5 },
   video: { minDuration: 120, minPct: 10, maxPct: 90, minAwayMin: 20 },
   stale: { openHours: 4, awayHours: 2, minActiveSec: 60, boost: 1.2 },

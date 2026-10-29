@@ -95,13 +95,18 @@ export function evaluate(s: State, now: number): Candidate[] {
       }
       continue;
     }
-    const autosaves = CONFIG.draftIgnoreDomains.some((d) => matchesDomain(v.domain, d));
+    // Forms on those sites (Google Forms lives on docs.google.com) don't autosave, so they still count.
+    const autosaves = v.pageType !== 'form' && CONFIG.draftIgnoreDomains.some((d) => matchesDomain(v.domain, d));
 
-    // R4: unfinished checkout
-    if (v.pageType === 'cart' && (sig.fieldsFilled >= 1 || v.activeSec >= CONFIG.cart.minActiveSec) && awayAtLeast(v, now, CONFIG.cart.minAwayMin)) {
-      add('unfinished_checkout', v, [`Cart / checkout on ${v.domain}`, 'No order confirmation seen', cap(leftText(v, now))], {
-        filled: sig.fieldsFilled,
-      });
+    // R4: unfinished checkout. Something left in the cart counts no matter how long you looked, so time spent doesn't lower the score.
+    if (v.pageType === 'cart' && !v.features?.cartEmpty && awayAtLeast(v, now, CONFIG.cart.minAwayMin)) {
+      add(
+        'unfinished_checkout',
+        v,
+        [`Cart / checkout on ${v.domain}`, 'No order confirmation seen', cap(leftText(v, now))],
+        { filled: sig.fieldsFilled },
+        { score: clamp(CONFIG.base.unfinished_checkout * recency(leftAtOf(v), now), 0, 1) },
+      );
     }
     // R1: abandoned form
     else if (!autosaves && sig.fieldsFilled >= CONFIG.form.minFilled && !sig.submitted && awayAtLeast(v, now, CONFIG.form.minAwayMin)) {

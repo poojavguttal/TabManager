@@ -9,8 +9,8 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["chrome"],
+    "types": ["chrome", "node"],
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts", "vite.content.config.ts"]
+  "include": ["src", "tests", "vite.config.ts", "vite.content.config.ts", "vitest.config.ts", "vitest.eval.config.ts"]
 }

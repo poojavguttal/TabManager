@@ -10,10 +10,10 @@ export interface ToastRequest {
 const AUTO_HIDE_MS = 15_000;
 
 export function showToast(t: ToastRequest) {
-  document.getElementById('tab-resume-toast')?.remove();
+  document.getElementById('tab-todos-toast')?.remove();
 
   const host = document.createElement('div');
-  host.id = 'tab-resume-toast';
+  host.id = 'tab-todos-toast';
   host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
   const root = host.attachShadow({ mode: 'closed' });
 

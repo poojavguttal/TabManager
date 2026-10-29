@@ -70,12 +70,6 @@ export const SearchIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M20 20l-3.5-3.5" />
   </svg>
 );
-export const ShieldIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}>
-    <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
-    <path d="M9 12l2 2 4-4" />
-  </svg>
-);
 
 /** App logo: a white check on a rounded yellow square with a folded "tab" corner. Same as the PNG icons. */
 export const Logo = ({ size = 28 }: { size?: number }) => (
