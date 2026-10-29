@@ -99,7 +99,7 @@ export function evaluate(s: State, now: number): Candidate[] {
     const autosaves = v.pageType !== 'form' && CONFIG.draftIgnoreDomains.some((d) => matchesDomain(v.domain, d));
 
     // R4: unfinished checkout. Something left in the cart counts no matter how long you looked, so time spent doesn't lower the score.
-    if (v.pageType === 'cart' && !v.features?.cartEmpty && awayAtLeast(v, now, CONFIG.cart.minAwayMin)) {
+    if (v.pageType === 'cart' && !v.cartEmpty && awayAtLeast(v, now, CONFIG.cart.minAwayMin)) {
       add(
         'unfinished_checkout',
         v,

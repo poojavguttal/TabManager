@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IGNORED_TYPES, urlPageType } from '../background/classifier';
 import { isShown } from '../background/lifecycle';
+import { VISIT_PREFIX } from '../background/storage';
 import { TRACE_KEY, type TraceEvent } from '../background/trace';
 import { findApp } from '../shared/apps';
 import { CONFIG, DEFAULT_PREFS, RULE_ICONS, emptyState } from '../shared/config';
-import type { PanelMessage, Prefs, State, Task } from '../shared/types';
+import type { PanelMessage, Prefs, State, Task, Visit } from '../shared/types';
 import { normalizeUrl } from '../shared/url';
 import {
   BackIcon,
@@ -103,17 +104,32 @@ function useDropToAdd(onAdded: (title: string) => void) {
   return dragging;
 }
 
+/** Visits are stored one per key ("v:<id>"), the rest of the state under "state"; this puts them back together. */
 function useStore() {
   const [state, setState] = useState<State>(emptyState());
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   useEffect(() => {
-    chrome.storage.local.get(['state', 'prefs']).then((r) => {
-      if (r.state) setState({ ...emptyState(), ...r.state });
+    chrome.storage.local.get(null).then((r) => {
+      const stored = (r.state ?? {}) as Partial<State>;
+      const visits: State['visits'] = { ...(stored.visits ?? {}) };
+      for (const [k, v] of Object.entries(r)) if (k.startsWith(VISIT_PREFIX)) visits[k.slice(VISIT_PREFIX.length)] = v as Visit;
+      setState({ ...emptyState(), ...stored, visits });
       if (r.prefs) setPrefs({ ...DEFAULT_PREFS, ...r.prefs });
     });
     const onChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local') return;
-      if (changes.state?.newValue) setState({ ...emptyState(), ...changes.state.newValue });
+      const visitChanges = Object.entries(changes).filter(([k]) => k.startsWith(VISIT_PREFIX));
+      if (changes.state?.newValue || visitChanges.length) {
+        setState((prev) => {
+          const visits = { ...prev.visits };
+          for (const [k, c] of visitChanges) {
+            const id = k.slice(VISIT_PREFIX.length);
+            if (c.newValue) visits[id] = c.newValue as Visit;
+            else delete visits[id];
+          }
+          return { ...prev, ...(changes.state?.newValue ?? {}), visits };
+        });
+      }
       if (changes.prefs?.newValue) setPrefs({ ...DEFAULT_PREFS, ...changes.prefs.newValue });
     };
     chrome.storage.onChanged.addListener(onChange);

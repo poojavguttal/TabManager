@@ -118,3 +118,18 @@ describe('syncInbox', () => {
     expect(s.inbox[1]).toMatchObject({ seen: 5, newSince: undefined });
   });
 });
+
+describe('pruneVisits', () => {
+  it('keeps open tabs, visits an item points to, and recent ones; drops the rest', async () => {
+    const { pruneVisits } = await import('../../src/background/tracker');
+    const { visit, task, HOUR } = await import('../helpers');
+    const open = visit({ leftAt: NOW - 10 * HOUR });
+    const linked = visit({ closed: true, leftAt: NOW - 10 * HOUR });
+    const recent = visit({ closed: true, leftAt: NOW - HOUR });
+    const old = visit({ closed: true, leftAt: NOW - 3 * HOUR });
+    const s = stateWith([open, linked, recent, old]);
+    s.tasks.t = task({ key: 't', visitIds: [linked.id] });
+    pruneVisits(s, NOW);
+    expect(Object.keys(s.visits).sort()).toEqual([open.id, linked.id, recent.id].sort());
+  });
+});

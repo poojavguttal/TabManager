@@ -63,7 +63,7 @@ describe('evaluate: forms, drafts, checkout', () => {
     expect(c.score).toBeGreaterThanOrEqual(CONFIG.nudgeThreshold);
   });
   it('an empty cart, a finished order, or leaving a moment ago does not show', () => {
-    const empty = visit({ url: 'https://shop.com/cart', pageType: 'cart', features: { cartEmpty: true } as never });
+    const empty = visit({ url: 'https://shop.com/cart', pageType: 'cart', cartEmpty: true });
     expect(rulesOf(stateWith([empty]))).toEqual([]);
     expect(rulesOf(stateWith([visit({ pageType: 'cart', signals: { completed: true } })]))).toEqual([]);
     expect(rulesOf(stateWith([visit({ pageType: 'cart', leftAt: NOW - 30_000 })]))).toEqual([]);

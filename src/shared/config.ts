@@ -49,7 +49,8 @@ export const CONFIG = {
   suppressAfterDismissals: 3,
   taskExpireDays: 7,
   pruneFinishedDays: 14,
-  visitRetentionDays: 7,
+  /** Visits that never became an item are dropped this long after you leave them. */
+  visitKeepHours: 2,
   maxVisits: 600,
 
 

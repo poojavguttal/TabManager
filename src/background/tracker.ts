@@ -113,7 +113,7 @@ export function applyPageReport(s: State, prefs: Prefs, tabId: number, msg: Page
   };
 
   if (msg.features) {
-    v.features = msg.features;
+    v.cartEmpty = msg.features.cartEmpty;
     v.pageType = classify(v.url, msg.features);
   }
 
@@ -229,10 +229,15 @@ export function markInboxSeen(s: State, group: string) {
   }
 }
 
-export function pruneVisits(s: State) {
-  const cutoff = Date.now() - CONFIG.visitRetentionDays * 86_400_000;
+/**
+ * Keeps visits that can still matter: open tabs, ones an item points to, and recently left ones.
+ * A visit left long ago that never became an item never will (scores only fall with time), so it goes.
+ */
+export function pruneVisits(s: State, now = Date.now()) {
+  const cutoff = now - CONFIG.visitKeepHours * 3_600_000;
   const live = new Set(Object.values(s.tabVisit));
-  let visits = Object.values(s.visits).filter((v) => live.has(v.id) || v.startedAt > cutoff);
+  const referenced = new Set(Object.values(s.tasks).flatMap((t) => t.visitIds));
+  let visits = Object.values(s.visits).filter((v) => live.has(v.id) || referenced.has(v.id) || (v.leftAt ?? v.lastActiveAt) > cutoff);
   if (visits.length > CONFIG.maxVisits) {
     visits = visits.sort((a, b) => b.startedAt - a.startedAt).filter((v, i) => i < CONFIG.maxVisits || live.has(v.id));
   }

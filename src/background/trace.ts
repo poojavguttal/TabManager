@@ -32,8 +32,9 @@ export function because(key: string, reason: string) {
   reasons.set(key, reason);
 }
 
-/** Logs tasks created, deleted, or moved to another status. `source` is the default reason. */
-export function diffTasks(before: Record<string, Task>, after: Record<string, Task>, source: string) {
+/** Logs tasks created, deleted, or moved to another status. `source` is the default reason. Returns how many changed. */
+export function diffTasks(before: Record<string, Task>, after: Record<string, Task>, source: string): number {
+  const start = pending.length;
   const why = (key: string) => reasons.get(key) ?? source;
   for (const [key, t] of Object.entries(after)) {
     const old = before[key];
@@ -44,6 +45,7 @@ export function diffTasks(before: Record<string, Task>, after: Record<string, Ta
     if (!after[key]) trace('task', 'deleted', key, { rule: t.rule, status: t.status, title: t.title, reason: why(key) });
   }
   reasons.clear();
+  return pending.length - start;
 }
 
 /** Takes the events collected so far (for writing to storage). */

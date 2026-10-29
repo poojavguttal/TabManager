@@ -71,7 +71,8 @@ export interface Visit {
   lastContentSec: number;
   closed: boolean;
   pinned?: boolean;
-  features?: PageFeatures;
+  /** The only page feature needed after classification; the rest isn't stored. */
+  cartEmpty?: boolean;
   signals: PageSignals;
 }
 

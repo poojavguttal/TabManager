@@ -35,7 +35,7 @@ function run(c: EvalCase): Shown[] {
       url: c.url,
       title: c.title,
       pageType: classify(c.url, features),
-      features,
+      cartEmpty: features?.cartEmpty,
       activeSec: c.activeSec,
       closed: !!c.closed,
       startedAt: NOW - c.awayMin * MIN - c.activeSec * 1000,
