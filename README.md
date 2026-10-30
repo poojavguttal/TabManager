@@ -41,6 +41,18 @@ docs/            how it works
 scripts/         icon generator
 ```
 
+**Time taken:** 3–4 hours
+
+| # | Example input | Expected output |
+|---|---|---|
+| 1 | Partially watched video (10–90% watched), tab left idle for 20+ min | Flagged as unfinished: **"Stopped partway through"** |
+| 2 | Webpage manually saved to the to-do list (+ Add, drag and drop, right-click, or Alt+Shift+S) | Appears in **My list** as **"On your to-do list"** |
+| 3 | Half-filled form (2+ fields filled, not submitted), user leaves for 2+ min or closes the tab | Flagged as unfinished: **"Form not complete"** |
+| 4 | Inactive tab (untouched for over an hour) with no unfinished activity | Shown under **Open tabs** as a cleanup suggestion, not a to-do |
+| 5 | User clicks a saved task | The original webpage reopens (switches to the tab if it's still open, otherwise opens it in a new tab) |
+
+
+
 ## Commands
 
 | Command | What it does |
