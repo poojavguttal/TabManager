@@ -1,129 +1,55 @@
 # Tab Todos
 
-A Chrome extension that keeps a to-do list of what you left behind in your tabs — half-filled forms, docs you stopped
-reading, unsent messages, new emails, and tabs you haven't been back to — plus any tab you pick yourself. Check things
-off, or click one to jump back to it.
+A Chrome extension that turns your open tabs into a to-do list. It notices what you left unfinished — a half-filled
+form, an unsent message, a cart, a video you stopped halfway — and lets you save any tab yourself, close it, and come
+back to it later.
 
-**Your own to-dos:** get tabs off your tab bar and onto the list —
-- **Drag and drop** onto the panel: drag the icon at the left of the address bar (or any link). If the page is open, its
-  tab closes. (Chrome doesn't let extensions receive tabs dragged from the tab strip itself.)
-- **+ Add** in the panel: pick open tabs; "Close these tabs after adding" is on by default.
-- **Right-click** a page → **Add to Tab Todos** or **Move to Tab Todos (closes the tab)**; right-click a link →
-  **Add link to Tab Todos**.
-- **Alt+Shift+S** adds the tab you're on.
+**Everything stays on your computer.** No servers, no accounts, no AI.
 
-To-dos stay until you check them off — even after the tab is closed — and get reminders like everything else.
-
-**Runs 100% on your computer.** No servers, no accounts, no AI model, no network requests.
-
-## Setup
+## Install
 
 ```bash
 npm install
-npm run build          # outputs dist/
+npm run build
 ```
 
-1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick `dist/`.
-2. Pin Tab Todos and click its icon to open the side panel.
-3. Optional: click **Turn on** in the panel to let it notice unfinished forms, drafts and reading (Chrome asks for site
-   access at that point — not at install).
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and choose the `dist/` folder.
+3. Pin Tab Todos and click its icon to open the side panel.
+4. Optional: click **Turn on** in the panel so it can notice unfinished forms, drafts and reading.
 
-`npm run dev` rebuilds on change; then hit reload on the extension card.
+## Use it
 
-## Privacy & permissions
+- **Save a tab:** **+ Add** in the panel, drag a link or the address-bar icon onto the panel, right-click a page →
+  **Add to Tab Todos**, or press **Alt+Shift+S**.
+- **My list:** check items off, or click one to jump back to it.
+- **Open tabs:** tabs you haven't touched in over an hour — move them to your list or close them.
 
-| Permission | Why |
+See [docs/how-it-works.md](docs/how-it-works.md) for what it detects, reminders, permissions and privacy.
+
+## Repo guide
+
+```
+src/
+  background/    the extension's engine: tracks tabs, applies the rules, sends reminders
+  content/       the page sensor (runs on web pages once you turn it on)
+  sidepanel/     the side panel UI (React)
+  shared/        settings, types and helpers used everywhere
+public/          manifest.json and icons
+tests/
+  unit/          unit tests, one file per module, plus sample scenarios
+  eval/          labeled test set and its report (REPORT.md)
+docs/            how it works
+scripts/         icon generator
+```
+
+## Commands
+
+| Command | What it does |
 |---|---|
-| `tabs` | Tab titles and URLs — for the Open tabs list, new-message counts, and jumping back to a tab |
-| `storage` | Your list, kept in `chrome.storage.local` on this device only |
-| `sidePanel`, `notifications`, `alarms`, `idle` | The panel, reminders, and not reminding you while you're away |
-| `scripting`, `favicon` | Registering the page sensor once you turn it on; showing site icons |
-| `contextMenus` | The right-click **Add / Move to Tab Todos** items |
-| Site access (optional) | Only after you click **Turn on** — powers form/draft/reading detection. Revocable in Settings |
-
-What the page sensor sends to the extension: counts of fields you filled, whether a text box has *no / a short / a long*
-draft, scroll %, the heading you stopped at, video progress, and whether you submitted. **Never** field values, typed
-text, its exact length, or which keys you pressed. Sites on the blocklist (banking, health, email, password managers by
-default) aren't tracked at all.
-
-New messages and emails come from the unread number in the tab **title** ("(3) WhatsApp", "Inbox (12) – Gmail"), so no
-email content is ever read. We deliberately don't use the Gmail API: it would need Google's *restricted* mail scope, an
-OAuth client and a security review — far more access than a number in a title.
-
-## How it works
-
-```
-page sensor (opt-in)  →  background worker  →  chrome.storage.local  →  side panel
-  counts only              tracker → classifier → rules → lifecycle → reminders
-```
-
-| File | Role |
-|---|---|
-| `src/content/sensor.ts` | Engagement signals on the page (counts and levels only) |
-| `src/background/tracker.ts` | Tab events + sensor reports → visits; unread counts from titles |
-| `src/background/classifier.ts` | Page type from URL + page shape |
-| `src/background/rules.ts` | The rules below, plus scoring |
-| `src/background/lifecycle.ts` | To-do state: active, snoozed, done, auto-completed |
-| `src/background/labels.ts` | Item names and short statuses ("Application not complete") |
-| `src/background/nudges.ts` | Reminders and their guardrails |
-| `src/shared/config.ts` | **Every threshold** — tune here |
-
-### Rules
-
-| Rule | Shows up when | Needs page detection |
-|---|---|---|
-| Unsent message | text typed in Teams, Slack, WhatsApp, Discord… not sent, away ≥1 min | yes |
-| Form not complete | ≥2 fields filled by you, not submitted, away ≥2 min or tab closed | yes |
-| Draft not sent | a long draft in a text box, not sent, away ≥2 min | yes |
-| Checkout not complete | cart/checkout page with something in it, no order confirmation (time spent doesn't matter) | yes |
-| Reading / setup not finished | docs or article, ≥45 s active, scrolled 15–85 %, away ≥5 min | yes |
-| Video not finished | video >2 min, watched 10–90 %, away ≥20 min (scored on watch time) | yes |
-| New messages / emails | unread number in an open messaging or email tab went up since you last looked | no |
-| To do | you added it (drag and drop, + Add, right-click, or Alt+Shift+S) | no |
-
-Items finish on their own when you submit (and land on a confirmation page), send the message, read past 85 % or watch
-past 90 %. New-message items disappear when you visit the tab.
-
-**Open tabs** (second tab in the panel) lists tabs you haven't visited for over an hour (not searches, feeds, logins, messaging apps, pinned tabs or to-dos), one per page — click to go there, **+** to
-move it to your to-do list, **×** to close it.
-
-### Reminders
-
-- **Closing** — you close a tab with unfinished work: "Saved for later … [Reopen] [Not needed]".
-- **Welcome back** — after ≥15 min away from the computer.
-- **Stale** — an important item untouched for ≥20 min.
-
-Guardrails: max 1 reminder per 20 min, 3 per item, none while typing / fullscreen / locked, quiet hours, pause button.
-New messages never trigger reminders.
-
-## Testing
-
-```bash
-npm test               # unit tests (Vitest), ~0.2 s
-npm run eval           # labeled detection set → precision / recall, writes tests/eval/REPORT.md
-npm run typecheck
-```
-
-- **Unit tests** — `tests/unit/`, one file per module: URL cleanup and blocklist, messaging apps and unread counts,
-  page classifier, rules and scoring, labels, list lifecycle (to-dos never expire), reminder guardrails, tab tracking,
-  trace log. Fixtures and a fixed clock live in `tests/helpers.ts`.
-- **Labeled set** — `tests/eval/cases.ts`: realistic situations, each with the answer a person would expect (show this,
-  or stay quiet). The run fails if precision or recall drops below 85% or a status text is wrong. Cases are labeled by
-  what a user would want, not by what the code does, so known misses stay visible in the report. Add a case for every
-  bug you find.
-
-## Traceability (for developers)
-
-Every change to the list is written to a local trace log (`chrome.storage.local` → `trace`, newest 1,000 events):
-
-| Kind | Logged when |
-|---|---|
-| `task` | an item is created, changes status, or is deleted — with the reason (e.g. "you clicked done", "untouched for 7 days", "site added to blocklist") |
-| `nudge` | a reminder is sent |
-| `lifecycle` | install / reload / browser start, plus how many to-dos were on the list at startup |
-| `error` | a state update, message, reminder or anything uncaught fails |
-
-Task changes are caught by comparing the list before and after every state update (`src/background/storage.ts`), so
-nothing can change the list without leaving a line in the log. See it in **Settings → Debug** (live), or click
-**Download log** for a JSON file with the log plus a snapshot of the list to attach to a bug report. Events are also
-printed to the service worker console (`chrome://extensions` → Tab Todos → *service worker*, verbose level).
+| `npm run build` | Build the extension into `dist/` |
+| `npm run dev` | Rebuild on every change (then reload the extension) |
+| `npm test` | Run all unit tests |
+| `npm run samples` | Run the sample scenarios with expected outputs |
+| `npm run eval` | Score detection on the labeled set; writes `tests/eval/REPORT.md` |
+| `npm run typecheck` | Check types |

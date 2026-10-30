@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval": "vitest run -c vitest.eval.config.ts",
+    "samples": "vitest run tests/unit/samples.test.ts --reporter=verbose",
     "dev": "vite build --watch"
   },
   "type": "module",
