@@ -1,10 +1,8 @@
 # Tab Todos
 
-A Chrome extension that turns your open tabs into a to-do list. It notices what you left unfinished — a half-filled
-form, an unsent message, a cart, a video you stopped halfway — and lets you save any tab yourself, close it, and come
+A Chrome extension that turns your open tabs into a to-do list. It notices what you left unfinished, a half-filled
+form, an unsent message, a cart, a video you stopped halfway and lets you save any tab yourself, close it, and come
 back to it later.
-
-**Everything stays on your computer.** No servers, no accounts, no AI.
 
 ## Install
 
